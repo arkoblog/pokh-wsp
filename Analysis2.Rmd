@@ -1,0 +1,108 @@
+---
+title: WSP Data Analysis
+author: Part II of the Uncovering Insights series
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+
+
+# Introduction
+
+The is the second part of the  exercise on water supply data analysis. We start by first loading the required data sets, and preparing the data for analysis:
+
+```{r include=FALSE }
+# Setting repository
+options(repos='http://cran.rstudio.com/')
+# Load required packages
+library(prettydoc)
+library(ggplot2)
+library(plotly)
+library(reshape2)
+library(dplyr)
+
+# Load Data
+data<- read.csv("mcpl_report_validated.csv")
+data_pr<-read.csv("mcpl_profile_validated.csv")
+data_pr<-data_pr[,c("town","popn_in_service_area")]
+data<-left_join(data,data_pr)
+```
+
+Let us start by looking at the variables at our disposal:
+
+```{r}
+# Picking required columns
+names(data)
+```
+
+## PICKING ANALYSIS VARIABLES
+
+We will be looking at the following variables for today's analysis:
+
+* <b>prod_m3_per_day</b>              
+* <b>consumption_lpcd</b>
+* <b>production_lpcd</b> 
+* <b>cost_per_m3_water_used</b>
+* <b>nrw</b>
+
+## BUILDING PLOTTING FUNCTIONS
+
+We will be building the plotting functions once again:
+
+```{r}
+chartPlot<- function (x, rows,sortvar) {
+    chartData <- transform(x,town = reorder(town,rank(eval(parse(text=sortvar)))))
+    chartData<-melt(chartData,id.vars='town')
+    plot<-ggplot(chartData,aes(x=town, y=value)) +
+            geom_bar(width=1,aes(fill = variable),stat="identity") +
+            coord_flip() +
+            facet_wrap("variable", scales = "free", nrow = rows) +
+            scale_x_discrete(name="") +
+            scale_y_continuous(name="") +
+            theme(text = element_text(size=8), legend.position="none",axis.ticks.x=element_blank()) +
+            guides(fill=FALSE) +
+            geom_text(aes(label = round(value,1)),size = 2.5, position = position_stack(vjust = 0.5))
+     
+    return(plot)
+}
+
+groupedBarPlot<- function(x, sortvar) {
+  chartData <- transform(x, town = reorder(town, rank(eval(parse(text=sortvar)))))
+  chartData<-melt(chartData, id.vars = 'town')
+  plot<-ggplot(chartData,aes(x=town, y=value)) +   
+          scale_x_discrete(name="") +
+          scale_y_continuous(name="") +
+          geom_bar(width=0.6, aes(fill = variable), position = "dodge", stat="identity") +
+          theme(text = element_text(size=8), legend.position="bottom", axis.ticks.x=element_blank(), axis.text.x =element_text(angle = 90,hjust = 1)) +
+          guides(fill=FALSE)
+return(plot)
+}
+```
+
+## DATA ANALYSIS
+
+```{r}
+# Calcuating people per connection
+chartData<-data[, c("town","production_lpcd", "consumption_lpcd", "prod_m3_per_day", "nrw","popn_covered", "total_taps", "cost_per_m3_water_used")]
+chartData$people_per_conn <- chartData$popn_covered/chartData$total_taps
+ggplotly(chartPlot(chartData[,c(1,3)], 1, "consumption_lpcd"))
+
+summary(chartData$consumption_lpcd)
+
+ggplotly(chartPlot(chartData[,c(1,2)], 1, "production_lpcd"))
+
+chartData$extra<-chartData$production_lpcd-chartData$consumption_lpcd
+ggplotly(chartPlot(chartData[,c(1,3,2,10)], 1, "extra"))
+summary(chartData$extra)
+
+chartData$elmpc<-chartData$extra*chartData$cost_per_m3_water_used
+ggplotly(chartPlot(chartData[,c(1,11)], 1, "elmpc"))
+
+chartData$tlm<-chartData$elmpc*chartData$popn_covered
+ggplotly(chartPlot(chartData[,c(1,12)], 1, "tlm"))
+summary(chartData$tlm)
+
+```
+
