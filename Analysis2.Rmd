@@ -3,7 +3,7 @@ title: WSP Data Analysis
 author: Part II of the Uncovering Insights series
 output:
   prettydoc::html_pretty:
-    theme: architect
+    theme: cayman
     highlight: github
 ---
 
@@ -24,9 +24,9 @@ library(reshape2)
 library(dplyr)
 
 # Load Data
-data<- read.csv("mcpl_report_validated.csv")
-data_pr<-read.csv("mcpl_profile_validated.csv")
-data_pr<-data_pr[,c("town","popn_in_service_area")]
+data<- read.csv("./data/mcpl_report_validated.csv")
+data_pr<-read.csv("./data/mcpl_profile_validated.csv")
+data_pr<-data_pr[,c("town","water_consumption_sold_or_used", "operational_cost_per_m3_prodn")]
 data<-left_join(data,data_pr)
 ```
 
@@ -41,11 +41,10 @@ names(data)
 
 We will be looking at the following variables for today's analysis:
 
-* <b>prod_m3_per_day</b>              
-* <b>consumption_lpcd</b>
-* <b>production_lpcd</b> 
-* <b>cost_per_m3_water_used</b>
-* <b>nrw</b>
+* <b>prod_m3_per_day</b>: As the name suggests, it is nothing but the average daily amount of water produced in a service area (expessed in meter cubes per day)
+* <b>water_consumption_sold_or_used</b>: the average daily amount of water consumed in a service area (expessed in meter cubes per day)
+* <b>operational_cost_per_m3_prodn</b>: The average operational cost for producing one meter cube of water in each service area
+* <b>total_taps</b>: Total number of connections within a given service area
 
 ## BUILDING PLOTTING FUNCTIONS
 
@@ -85,24 +84,41 @@ return(plot)
 
 ```{r}
 # Calcuating people per connection
-chartData<-data[, c("town","production_lpcd", "consumption_lpcd", "prod_m3_per_day", "nrw","popn_covered", "total_taps", "cost_per_m3_water_used")]
+chartData<-data[, c("town", "prod_m3_per_day", "total_taps","popn_covered" , "water_consumption_sold_or_used", "operational_cost_per_m3_prodn" )]
 chartData$people_per_conn <- chartData$popn_covered/chartData$total_taps
-ggplotly(chartPlot(chartData[,c(1,3)], 1, "consumption_lpcd"))
+chartData$prod_per_day_connection<-chartData$prod_m3_per_day/chartData$total_taps
+chartData$cons_per_day_connection<-chartData$water_consumption_sold_or_used/chartData$total_taps
 
-summary(chartData$consumption_lpcd)
+ggplotly(chartPlot(chartData[,c(1,8,9)], 1, "cons_per_day_connection"))
+```
 
-ggplotly(chartPlot(chartData[,c(1,2)], 1, "production_lpcd"))
+Removing Hemja as an outlier, we have:
 
-chartData$extra<-chartData$production_lpcd-chartData$consumption_lpcd
-ggplotly(chartPlot(chartData[,c(1,3,2,10)], 1, "extra"))
-summary(chartData$extra)
+```{r}
+ggplotly(chartPlot(chartData[-which(chartData$town=="Hemja"),c(1,8,9)], 1, "prod_per_day_connection"))
+```
 
-chartData$elmpc<-chartData$extra*chartData$cost_per_m3_water_used
-ggplotly(chartPlot(chartData[,c(1,11)], 1, "elmpc"))
+Calculating the difference to estimate extra water production per day per connection, and plotting the same we have:
 
-chartData$tlm<-chartData$elmpc*chartData$popn_covered
-ggplotly(chartPlot(chartData[,c(1,12)], 1, "tlm"))
-summary(chartData$tlm)
+```{r}
+chartData$ewp_perday_perconn<- chartData$prod_per_day_connection-chartData$cons_per_day_connection
+ggplotly(chartPlot(chartData[-which(chartData$town=="Hemja"),c(1,10)], 1, "ewp_perday_perconn"))
+```
 
+Calculating the average operational cost per m3 of production that could be saved in a day:
+
+```{r}
+chartData$pot_op_cost_sav_daily<- chartData$ewp_perday_perconn * chartData$operational_cost_per_m3_prodn
+ggplotly(chartPlot(chartData[-which(chartData$town=="Hemja"),c(1,11)], 1, "pot_op_cost_sav_daily"))
+```
+
+Calculating max potential savings in a year:
+
+```{r}
+chartData$pot_op_cost_sav_yearly<- chartData$pot_op_cost_sav_daily * chartData$total_taps * 365
+ggplotly(chartPlot(chartData[-which(chartData$town=="Hemja"),c(1,12)], 1, "pot_op_cost_sav_yearly"))
+
+# Calculate summary stats:
+summary(chartData$pot_op_cost_sav_yearly)
 ```
 
